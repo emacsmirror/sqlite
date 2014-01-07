@@ -167,8 +167,10 @@ If NOERROR is t, then will not signal an error when the DESCRIPTOR is not regist
   (let ((process-buffer (sqlite-descriptor-buffer descriptor)))
     (if (get-buffer-process process-buffer)
         (progn ;; Process buffer exists... unregister it
+          (set-process-query-on-exit-flag (get-process (get-buffer-process process-buffer)) nil)
           (comint-redirect-send-command-to-process ".quit" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
           (sqlite-unregister-descriptor descriptor)
+          (kill-buffer process-buffer)
           t)
       (progn
         (sqlite-unregister-descriptor descriptor) ;; We unregister the descriptor nevertheless
