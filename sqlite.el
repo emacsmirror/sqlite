@@ -94,6 +94,8 @@
 
 (defvar sqlite-process-buffer "sqlite-process" "*Name of the SQLITE process buffer. This is where SQL commands are sent.")
 
+(defvar sqlite-include-headers nil "If non-nil, include headers in query results.")
+
                                         ; Process list storing and manipulation
                                         ; ----------------------------------------
 
@@ -146,11 +148,13 @@ Returns the sqlite process descriptor, a unique id that you can use to retrieve 
     (accept-process-output (get-buffer-process process-buffer)) ;; Wait for the results and for first echo
     ;; We use CSV for parsing results.
     (comint-redirect-send-command-to-process ".mode csv" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
+    (comint-redirect-send-command-to-process ".separator |" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
     ;; We remove prompt.
     (comint-redirect-send-command-to-process ".prompt \"\"" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
     (accept-process-output (get-buffer-process process-buffer) 1) ;; Wait for the results and for first echo
     ;; Add headers.
-    (comint-redirect-send-command-to-process ".headers on" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
+    (comint-redirect-send-command-to-process (if sqlite-include-headers ".headers on" ".headers off")
+                                             sqlite-output-buffer (get-buffer-process process-buffer) nil t)
     (accept-process-output (get-buffer-process process-buffer) 1) ;; Wait for the results and for first echo
 
     (get-buffer-create sqlite-output-buffer))
@@ -178,19 +182,13 @@ If NOERROR is t, then will not signal an error when the DESCRIPTOR is not regist
           (error "Process buffer doesn't exists for that descriptor"))
         nil))))
 
-(defconst sqlite-regexp-next-value "\\(\"[^\"]*\"\\|[^\"][^,]*\\)\\(,\\|$\\)"
-  "Used when we want to take the next value. Must match up to the first \",\" that divides between column.")
-
 (defun sqlite-take-next-value (line)
   "Take one value up to a \",\" from LINE. This considers \".
 Return a list with two elements: (value rest-of-line)"
   (if (equal line "")
       nil
-    (progn ;; Is not an empty line...
-      (string-match sqlite-regexp-next-value line)
-      (list
-       (match-string-no-properties 1 line)
-       (substring-no-properties line (match-end 0))))))
+    (let ((vals (split-string "|" line)))
+      (list (car vals) (mapconcat 'identity (cdr vals) "|")))))
 
 (defun sqlite-parse-line ()
   "Take one line from the current-buffer and parse it returning a list of elements per column."
