@@ -187,7 +187,7 @@ If NOERROR is t, then will not signal an error when the DESCRIPTOR is not regist
 Return a list with two elements: (value rest-of-line)"
   (if (equal line "")
       nil
-    (let ((vals (split-string "|" line)))
+    (let ((vals (split-string line "|")))
       (list (car vals) (mapconcat 'identity (cdr vals) "|")))))
 
 (defun sqlite-parse-line ()
