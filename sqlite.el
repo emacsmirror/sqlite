@@ -161,11 +161,12 @@ that you can use to retrieve the process or send a query. "
 Returns t if everything is fine.
 nil if the DESCRIPTOR points to a non-existent process buffer.
 If NOERROR is t, then will not signal an error when the DESCRIPTOR is not registered."
-  (let ((process-buffer (sqlite-descriptor-buffer descriptor)))
+  (let* ((process-buffer (sqlite-descriptor-buffer descriptor))
+         (process (get-buffer-process process-buffer)))
     (if (get-buffer-process process-buffer)
         (progn ;; Process buffer exists... unregister it
-          (set-process-query-on-exit-flag (get-process (get-buffer-process process-buffer)) nil)
-          (comint-redirect-send-command-to-process ".quit" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
+          (set-process-query-on-exit-flag (get-process process) nil)
+          (comint-redirect-send-command-to-process ".quit" sqlite-output-buffer process nil t)
           (while (accept-process-output process 0.1))
           (sqlite-unregister-descriptor descriptor)
           (kill-buffer process-buffer)
@@ -227,14 +228,15 @@ DESCRIPTOR is the Sqlite instance descriptor given by `sqlite-init'.
 Return list of lists, as
     (header-list row1-list row2-list row3-list)
 "
-  (let ((process-buffer (sqlite-descriptor-buffer descriptor)))
-    (unless (get-buffer-process process-buffer)
+  (let* ((process-buffer (sqlite-descriptor-buffer descriptor))
+         (process (get-buffer-process process-buffer)))
+    (unless process
       (error "SQLite process buffer doesn't exist!"))
     (with-current-buffer sqlite-output-buffer
       (erase-buffer)
       (comint-redirect-send-command-to-process
        (sqlite-prepare-query sql-command)
-       sqlite-output-buffer (get-buffer-process process-buffer) nil t)
+       sqlite-output-buffer process nil t)
       (while (accept-process-output process 0.1))
       (sqlite-parse-result))))
 
