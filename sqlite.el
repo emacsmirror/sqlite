@@ -20,6 +20,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;;; Change Log:
+;; 26-Jul-2020    Mario Frasca
+;;    Added subr-x dependency, worked at waiting for command completion.
+;; 21-Dec-2013    Raimon Grau
+;;    Improved style and change chomp to sqlite-chomp to avoid name collisions
 ;; 24-Feb-2013    Christian
 ;;    Last-Updated: dom feb 24 20:49:45 2013 (-0300) #103 (Christian)
 ;;    `add-to-list' doesn't let you push new elements if they are already. We don't want this behaviour.
@@ -97,11 +101,8 @@
 (defvar sqlite-process-plist nil
   "A plist that associates descriptor to buffer process and databse file.
 Example:
- (setq sqlite-process-alist
-  '(
-      1 (\"*sqlite-process1*\" \"~/mydb1.sqlite\"))
-      2 (\"*sqlite-process2*\" \"~/databases/mydb2.sqlite\"))
-  ))")
+'(1 (\"*sqlite-process1*\" \"~/mydb1.sqlite\")
+  2 (\"*sqlite-process2*\" \"~/databases/mydb2.sqlite\"))")
 
 (defvar sqlite-descriptor-counter 0
   "This is a counter that adds 1 for each sqlite process opened. Used for referencing each sqlite process uniquely.")
@@ -135,6 +136,8 @@ that you can use to retrieve the process or send a query. "
                           (format "sqlite-process-%04d" sqlite-descriptor-counter)
                           sqlite-program nil db-file))
          (process (get-buffer-process process-buffer)))
+    (unless process
+      (error "Can't create new process"))
     (save-excursion
       (condition-case nil
           (set-buffer process-buffer)
