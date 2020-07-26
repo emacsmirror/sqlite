@@ -3,7 +3,7 @@
 ;; Filename: sqlite.el
 ;; Description:
 ;; Author: Christian Giménez
-;; Maintainer: 
+;; Maintainer:
 ;; Created: mié feb 13 11:12:31 2013 (-0300)
 ;; Version: 1.0
 ;; Last-Updated: dom feb 24 20:50:48 2013 (-0300)
@@ -15,13 +15,11 @@
 ;;
 ;; Features that might be required by this library:
 ;;
-;;   `cl'.
+;;   `cl', `subr-x'.
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;;; Change Log:
-;; 21-Dec-2013    Raimon Grau
-;;    Improved style and change chomp to sqlite-chomp to avoid name collisions
 ;; 24-Feb-2013    Christian
 ;;    Last-Updated: dom feb 24 20:49:45 2013 (-0300) #103 (Christian)
 ;;    `add-to-list' doesn't let you push new elements if they are already. We don't want this behaviour.
@@ -81,98 +79,91 @@
 ;;
 ;;; Code:
 
-
 (eval-when-compile
+  (require 'subr-x)
   (require 'cl))
-
 
 ;; Adapted from http://mysite.verizon.net/mbcladwell/sqlite.html#connect
 
-(defvar sqlite-program "sqlite3" "Full path name of the SQLITE executable.")
+(defvar sqlite-program "sqlite3" "Name the SQLite3 executable.  If not in $PATH, please specify full path.")
 
 (defvar sqlite-output-buffer "*sqlite-output*" "Name of the SQLite output buffer.")
 
-(defvar sqlite-process-buffer "sqlite-process" "*Name of the SQLITE process buffer. This is where SQL commands are sent.")
-
 (defvar sqlite-include-headers nil "If non-nil, include headers in query results.")
 
-                                        ; Process list storing and manipulation
-                                        ; ----------------------------------------
+;; Process list storing and manipulation
+;; ----------------------------------------
 
-(defvar sqlite-process-alist nil
-  "An alist that contains each descriptor with the corresponding buffers process and the file opened.
+(defvar sqlite-process-plist nil
+  "A plist that associates descriptor to buffer process and databse file.
 Example:
  (setq sqlite-process-alist
   '(
-      (1 . '(\"*sqlite-process1*\" \"~/mydb1.sqlite\"))
-      (2 . '(\"*sqlite-process2*\" \"~/databases/mydb2.sqlite\"))
-
+      1 (\"*sqlite-process1*\" \"~/mydb1.sqlite\"))
+      2 (\"*sqlite-process2*\" \"~/databases/mydb2.sqlite\"))
   ))")
 
 (defvar sqlite-descriptor-counter 0
   "This is a counter that adds 1 for each sqlite process opened. Used for referencing each sqlite process uniquely.")
 
 (defun sqlite-register-descriptor (descriptor buffer file)
-  "Register the descriptor with the buffer given adding it into `sqlite-process-alist'."
-  (add-to-list 'sqlite-process-alist (cons descriptor (list (list buffer file)))))
+  "Register the descriptor with the buffer given adding it into `sqlite-process-plist'."
+  (setq sqlite-process-plist (plist-put sqlite-process-plist descriptor `(,buffer ,file))))
 
 (defun sqlite-descriptor-buffer (descriptor)
-  "Return the buffer asociated to the DESCRIPTOR"
-  (car (cadr (assoc descriptor sqlite-process-alist))))
+  "Return the buffer associated to the DESCRIPTOR"
+  (car (plist-get sqlite-process-plist descriptor)))
+
+(defun sqlite-descriptor-database (descriptor)
+  "Return the database file associated to the DESCRIPTOR"
+  (cadr (plist-get sqlite-process-plist descriptor)))
 
 (defun sqlite-unregister-descriptor (descriptor)
-  "Remove the descriptor from the list of process buffers `sqlite-process-alist'."
-  (setq sqlite-process-alist (assq-delete-all descriptor sqlite-process-alist)))
+  "Remove the descriptor from the list of process buffers `sqlite-process-plist'."
+  (setq sqlite-process-plist (plist-put sqlite-process-plist descriptor nil)))
 
-                                        ; ----------------------------------------
-
+;; ----------------------------------------
 
 (defun sqlite-init (db-file)
   "Initialize sqlite interface opening the DB-FILE sqlite file.
-This start the process given by `sqlite-program' and prepare it for queries.
-
-Returns the sqlite process descriptor, a unique id that you can use to retrieve the process or send a query. "
-  (let ((process-buffer (concat "sqlite-process" (number-to-string sqlite-descriptor-counter))) ; name of the process buffer
-        )
-    (setq db-file (expand-file-name db-file))
-
-    (apply 'make-comint
-           process-buffer
-           sqlite-program  nil `(,db-file ))
-
-    (setq process-buffer (concat "*" process-buffer "*")) ;; Asteriscs automatically added by `make-comint'
-
+This starts the process given by `sqlite-program' and prepares it
+for queries.  Return the sqlite process descriptor, a unique id
+that you can use to retrieve the process or send a query. "
+  (let* ((db-file (expand-file-name db-file))
+         (comint-prompt-regexp "^\\(sqlite\\)?> ")
+         (process-buffer (make-comint
+                          (format "sqlite-process-%04d" sqlite-descriptor-counter)
+                          sqlite-program nil db-file))
+         (process (get-buffer-process process-buffer)))
+    (save-excursion
+      (condition-case nil
+          (set-buffer process-buffer)
+        (error))
+      (shell-mode))
     (sqlite-register-descriptor sqlite-descriptor-counter process-buffer db-file)
-    (setq sqlite-descriptor-counter (+ sqlite-descriptor-counter 1))
-
-    (accept-process-output (get-buffer-process process-buffer)) ;; Wait for the results and for first echo
-    ;; We use CSV for parsing results.
-    (comint-redirect-send-command-to-process ".mode csv" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
-    (comint-redirect-send-command-to-process ".separator |" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
-    ;; We remove prompt.
-    (comint-redirect-send-command-to-process ".prompt \"\"" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
-    (accept-process-output (get-buffer-process process-buffer) 1) ;; Wait for the results and for first echo
-    ;; Add headers.
+    (incf sqlite-descriptor-counter)
+    (while (accept-process-output process 0.1))
+    (comint-redirect-send-command-to-process ".mode list" sqlite-output-buffer process nil t)
+    (comint-redirect-send-command-to-process ".separator |" sqlite-output-buffer process nil t)
+    ;; configure whether headers are desired or not
     (comint-redirect-send-command-to-process (if sqlite-include-headers ".headers on" ".headers off")
-                                             sqlite-output-buffer (get-buffer-process process-buffer) nil t)
-    (accept-process-output (get-buffer-process process-buffer) 1) ;; Wait for the results and for first echo
-
+                                             sqlite-output-buffer process nil t)
+    (comint-redirect-send-command-to-process ".prompt \"> \"\"...> \"" sqlite-output-buffer process nil t)
+    (while (accept-process-output process 0.1))
     (get-buffer-create sqlite-output-buffer))
-
-  (- sqlite-descriptor-counter 1))
+  (1- sqlite-descriptor-counter))
 
 (defun sqlite-bye (descriptor &optional noerror)
   "Finish the sqlite process sending the \".quit\" command.
-
 Returns t if everything is fine.
 nil if the DESCRIPTOR points to a non-existent process buffer.
-
 If NOERROR is t, then will not signal an error when the DESCRIPTOR is not registered."
   (let ((process-buffer (sqlite-descriptor-buffer descriptor)))
     (if (get-buffer-process process-buffer)
         (progn ;; Process buffer exists... unregister it
           (set-process-query-on-exit-flag (get-process (get-buffer-process process-buffer)) nil)
           (comint-redirect-send-command-to-process ".quit" sqlite-output-buffer (get-buffer-process process-buffer) nil t)
+          (while (accept-process-output process 0.1))
           (sqlite-unregister-descriptor descriptor)
           (kill-buffer process-buffer)
           t)
@@ -182,44 +173,26 @@ If NOERROR is t, then will not signal an error when the DESCRIPTOR is not regist
           (error "Process buffer doesn't exists for that descriptor"))
         nil))))
 
-(defun sqlite-take-next-value (line)
-  "Take one value up to a \",\" from LINE. This considers \".
-Return a list with two elements: (value rest-of-line)"
-  (if (equal line "")
-      nil
-    (let ((vals (split-string line "|")))
-      (list (car vals) (mapconcat 'identity (cdr vals) "|")))))
-
 (defun sqlite-parse-line ()
-  "Take one line from the current-buffer and parse it returning a list of elements per column."
-  (let ((line (sqlite-chomp (thing-at-point 'line)))
-        (parsed nil)
-        (next t))
-    (while next
-      (setq next (sqlite-take-next-value line))
-      (when next
-        (add-to-list 'parsed (car next) t 'ignore)
-        (setq line (cadr next))))
-    parsed))
+  "Parse result line at point, returning the list column values.
+Emtpy is replaced with nil."
+  (let* ((line (string-trim (thing-at-point 'line))))
+    (mapcar (lambda (item)
+              (and (not (equal item ""))
+                   item))
+            (split-string line "|"))))
 
 (defun sqlite-parse-result ()
   "Parse the results to create a list of header-list plus rows-lists.
-
 Result: (header-list row1-list row2-list row3-list) "
-  (let*  ((begin (goto-char (point-min)))		;4
-          (end (goto-char (point-max)))
-          (num-lines (count-lines begin end))
-          (counter 0)
-          (results-rows ()))
-    (goto-char (point-min))
+  (let ((num-lines (count-lines (goto-char (point-min)) (point-max)))
+        (results-rows nil))
     (if (sqlite-error-line) ;; Check if it is an error line
-        (error (concat "SQLite process error:" (sqlite-chomp (buffer-string)))))
-    ;; no error, as Fredie Mercury said: "show must go on..."
-    (while ( < counter num-lines)
-      (add-to-list 'results-rows (sqlite-parse-line) t 'ignore)
-      (forward-line)
-      (setq counter (+ 1 counter)))
-    (car `(,results-rows))))
+        (error (concat "SQLite process error:" (string-trim (buffer-string)))))
+    (dotimes (counter num-lines)
+      (push (sqlite-parse-line) results-rows)
+      (forward-line))
+    (nreverse results-rows)))
 
 (defconst sqlite-regexp-error "Error:\\(.*\\)$"
   "This regexp must match the error return of SQLite. There must be a parenthesis surrounding the error message for matching it with:
@@ -229,7 +202,7 @@ This is used for `sqlite-check-errors' for raising errors with messages.")
 (defun sqlite-error-line ()
   "Return t if the current line at the `sqlite-output-buffer' buffer match the `sqlite-regexp-error'. Else, return nil."
   (with-current-buffer sqlite-output-buffer
-    (if (string-match sqlite-regexp-error (sqlite-chomp (thing-at-point 'line)))
+    (if (string-match sqlite-regexp-error (string-trim (thing-at-point 'line)))
         t
       nil)))
 
@@ -237,52 +210,30 @@ This is used for `sqlite-check-errors' for raising errors with messages.")
   "This regexp must match an SQLite command. This is used for identifying which is an SQL command and which is a proper SQLite command.")
 
 (defun sqlite-prepare-query (sql-command)
-  "Return the query prepared.
-
-If the query start with \".\" means that is a SQLite command, so we don't add a \";\" at the end;
-else, we add a \";\" beacuse it is an SQL command. Remember: two \";\" has no effect in SQLite! :)"
-  (if (string-match sqlite-regexp-sqlite-command sql-command)
-      sql-command
-    (concat sql-command ";")))
+  "Add a query terminator to SQL-COMMAND if necessary
+SQLite commands start with \".\" and don't need terminator."
+  (cond ((string-match "^\\." sql-command)
+         sql-command)
+        ((string-match ";$" sql-command)
+         sql-command)
+        (t (concat sql-command ";"))))
 
 (defun sqlite-query (descriptor sql-command)
   "Send a query to the SQLite process and return the result.
-
 DESCRIPTOR is the Sqlite instance descriptor given by `sqlite-init'.
-
-Result:
-The result is a \"table\" like the following:
-
+Return list of lists, as
     (header-list row1-list row2-list row3-list)
-
 "
   (let ((process-buffer (sqlite-descriptor-buffer descriptor)))
     (unless (get-buffer-process process-buffer)
       (error "SQLite process buffer doesn't exist!"))
     (with-current-buffer sqlite-output-buffer
       (erase-buffer)
-
       (comint-redirect-send-command-to-process
-       (sqlite-prepare-query sql-command) ;; Sometimes developers don't want to add a ";" in the query...
+       (sqlite-prepare-query sql-command)
        sqlite-output-buffer (get-buffer-process process-buffer) nil t)
-      (accept-process-output (get-buffer-process process-buffer) 1)  ;need to wait to obtain results
-      (let ((result (sqlite-parse-result))) ;; we want to return the result! not the erase-buffer return value
-        (erase-buffer)
-        result))))
-
-(defun sqlite-chomp (str)
-  "Trim whitespace from string"
-  (let ((s (if (symbolp str)(symbol-name str) str)))
-    (save-excursion
-      (while (and
-              (not (null (string-match "^\\( \\|\f\\|\t\\|\n\\)" s)))
-              (> (length s) (string-match "^\\( \\|\f\\|\t\\|\n\\)" s)))
-        (setq s (replace-match "" t nil s)))
-      (while (and
-              (not (null (string-match "\\( \\|\f\\|\t\\|\n\\)$" s)))
-              (> (length s) (string-match "\\( \\|\f\\|\t\\|\n\\)$" s)))
-        (setq s (replace-match "" t nil s))))
-    s))
+      (while (accept-process-output process 0.1))
+      (sqlite-parse-result))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sqlite.el ends here
