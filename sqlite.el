@@ -179,16 +179,21 @@ If NOERROR is t, then will not signal an error when the DESCRIPTOR is not regist
 
 (defun sqlite-parse-line ()
   "Parse result line at point, returning the list column values.
-Emtpy is replaced with nil."
+Empty is replaced with nil."
   (let* ((line (string-trim (thing-at-point 'line))))
     (mapcar (lambda (item)
               (and (not (equal item ""))
                    item))
-            (split-string line "|"))))
+            (mapcar #'string-trim (split-string line "|")))))
 
 (defun sqlite-parse-result ()
-  "Parse the results to create a list of header-list plus rows-lists.
-Result: (header-list row1-list row2-list row3-list) "
+  "Parse the lines in the current buffer into a list of lists.
+This is intended to be called with *sqlite-output* being the
+current buffer, but it's up to the caller to make sure, this
+function will not enforce it.  The first line can be a header
+line, depending on the value of sqlite-include-headers.  The
+result looks like this: (header-list row1-list row2-list
+row3-list) "
   (let ((num-lines (count-lines (goto-char (point-min)) (point-max)))
         (results-rows nil))
     (if (sqlite-error-line) ;; Check if it is an error line
@@ -204,11 +209,10 @@ Result: (header-list row1-list row2-list row3-list) "
 This is used for `sqlite-check-errors' for raising errors with messages.")
 
 (defun sqlite-error-line ()
-  "Return t if the current line at the `sqlite-output-buffer' buffer match the `sqlite-regexp-error'. Else, return nil."
-  (with-current-buffer sqlite-output-buffer
-    (if (string-match sqlite-regexp-error (string-trim (thing-at-point 'line)))
-        t
-      nil)))
+  "Return t if the thing-at-point matches `sqlite-regexp-error'. Else, return nil."
+  (if (string-match sqlite-regexp-error (string-trim (thing-at-point 'line)))
+      t
+    nil))
 
 (defvar sqlite-regexp-sqlite-command "^\\..*"
   "This regexp must match an SQLite command. This is used for identifying which is an SQL command and which is a proper SQLite command.")
