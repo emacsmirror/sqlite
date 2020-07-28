@@ -95,6 +95,8 @@
 
 (defvar sqlite-include-headers nil "If non-nil, include headers in query results.")
 
+(defvar sqlite-response-timeout 0.4 "Timeout for the next result line.")
+
 ;; Process list storing and manipulation
 ;; ----------------------------------------
 
@@ -132,7 +134,7 @@ for queries.  Return the sqlite process descriptor, a unique id
 that you can use to retrieve the process or send a query. "
   (let* ((db-file (expand-file-name db-file))
          (comint-use-prompt-regexp t)
-         (comint-prompt-regexp "^\\(sqlite\\)?> ")
+         (comint-prompt-regexp "^\\(sqlite\\)?>")
          (process-buffer (make-comint
                           (format "sqlite-process-%04d" sqlite-descriptor-counter)
                           sqlite-program nil db-file))
@@ -146,14 +148,15 @@ that you can use to retrieve the process or send a query. "
       (shell-mode))
     (sqlite-register-descriptor sqlite-descriptor-counter process-buffer db-file)
     (incf sqlite-descriptor-counter)
-    (while (accept-process-output process 0.1))
+    (while (accept-process-output process sqlite-response-timeout))
     (comint-redirect-send-command-to-process ".mode list" sqlite-output-buffer process nil t)
     (comint-redirect-send-command-to-process ".separator |" sqlite-output-buffer process nil t)
     ;; configure whether headers are desired or not
-    (comint-redirect-send-command-to-process (if sqlite-include-headers ".headers on" ".headers off")
-                                             sqlite-output-buffer process nil t)
+    (comint-redirect-send-command-to-process
+     (if sqlite-include-headers ".headers on" ".headers off")
+     sqlite-output-buffer process nil t)
     (comint-redirect-send-command-to-process ".prompt \"> \"\"...> \"" sqlite-output-buffer process nil t)
-    (while (accept-process-output process 0.1))
+    (while (accept-process-output process sqlite-response-timeout))
     (get-buffer-create sqlite-output-buffer))
   (1- sqlite-descriptor-counter))
 
@@ -170,7 +173,7 @@ If NOERROR is t, then will not signal an error when the DESCRIPTOR is not regist
         (progn ;; Process buffer exists... unregister it
           (set-process-query-on-exit-flag (get-process process) nil)
           (comint-redirect-send-command-to-process ".quit" sqlite-output-buffer process nil t)
-          (while (accept-process-output process 0.1))
+          (while (accept-process-output process sqlite-response-timeout))
           (sqlite-unregister-descriptor descriptor)
           (kill-buffer process-buffer)
           t)
@@ -212,10 +215,12 @@ row3-list) "
 This is used for `sqlite-check-errors' for raising errors with messages.")
 
 (defun sqlite-error-line ()
-  "Return t if the thing-at-point matches `sqlite-regexp-error'. Else, return nil."
-  (if (string-match sqlite-regexp-error (string-trim (thing-at-point 'line)))
-      t
-    nil))
+  "Return t if the current line at the `sqlite-output-buffer' buffer match the `sqlite-regexp-error'. Else, return nil."
+  (with-current-buffer sqlite-output-buffer
+    (let ((line (thing-at-point 'line)))
+      (cond ((null line) nil)
+	    ((string-match sqlite-regexp-error (string-trim line)) t)
+	    (t nil)))))
 
 (defvar sqlite-regexp-sqlite-command "^\\..*"
   "This regexp must match an SQLite command. This is used for identifying which is an SQL command and which is a proper SQLite command.")
@@ -246,7 +251,7 @@ Return list of lists, as
       (comint-redirect-send-command-to-process
        (sqlite-prepare-query sql-command)
        sqlite-output-buffer process nil t)
-      (while (accept-process-output process 0.1))
+      (while (accept-process-output process sqlite-response-timeout))
       (sqlite-parse-result))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
