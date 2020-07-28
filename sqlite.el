@@ -131,6 +131,7 @@ This starts the process given by `sqlite-program' and prepares it
 for queries.  Return the sqlite process descriptor, a unique id
 that you can use to retrieve the process or send a query. "
   (let* ((db-file (expand-file-name db-file))
+         (comint-use-prompt-regexp t)
          (comint-prompt-regexp "^\\(sqlite\\)?> ")
          (process-buffer (make-comint
                           (format "sqlite-process-%04d" sqlite-descriptor-counter)
@@ -161,7 +162,9 @@ that you can use to retrieve the process or send a query. "
 Returns t if everything is fine.
 nil if the DESCRIPTOR points to a non-existent process buffer.
 If NOERROR is t, then will not signal an error when the DESCRIPTOR is not registered."
-  (let* ((process-buffer (sqlite-descriptor-buffer descriptor))
+  (let* ((comint-use-prompt-regexp t)
+         (comint-prompt-regexp "^\\(sqlite\\)?>")
+         (process-buffer (sqlite-descriptor-buffer descriptor))
          (process (get-buffer-process process-buffer)))
     (if (get-buffer-process process-buffer)
         (progn ;; Process buffer exists... unregister it
@@ -232,7 +235,9 @@ DESCRIPTOR is the Sqlite instance descriptor given by `sqlite-init'.
 Return list of lists, as
     (header-list row1-list row2-list row3-list)
 "
-  (let* ((process-buffer (sqlite-descriptor-buffer descriptor))
+  (let* ((comint-use-prompt-regexp t)
+         (comint-prompt-regexp "^\\(sqlite\\)?>")
+         (process-buffer (sqlite-descriptor-buffer descriptor))
          (process (get-buffer-process process-buffer)))
     (unless process
       (error "SQLite process buffer doesn't exist!"))
