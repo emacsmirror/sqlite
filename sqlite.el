@@ -32,18 +32,24 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'subr-x)
+(require 'shell)
 
 ;; Adapted from:
 ;; https://web.archive.org/web/*/http://mysite.verizon.net/mbcladwell/sqlite.html#connect
 
-(defvar sqlite-program "sqlite3" "Name the SQLite3 executable.  If not in $PATH, please specify full path.")
+(defvar sqlite-program "sqlite3"
+  "Name the SQLite3 executable.  If not in $PATH, please specify full path.")
 
-(defvar sqlite-output-buffer "*sqlite-output*" "Name of the SQLite output buffer.")
+(defvar sqlite-output-buffer "*sqlite-output*"
+  "Name of the SQLite output buffer.")
 
-(defvar sqlite-include-headers nil "If non-nil, include headers in query results.")
+(defvar sqlite-include-headers nil
+  "If non-nil, include headers in query results.")
 
-(defvar sqlite-response-timeout 0.4 "Timeout for the next result line.")
+(defvar sqlite-response-timeout 0.4
+  "Timeout for the next result line.")
 
 ;; Process list storing and manipulation
 ;; ----------------------------------------
@@ -66,11 +72,11 @@ Registering is adding the proper association into `sqlite-process-plist'."
   (setq sqlite-process-plist (plist-put sqlite-process-plist descriptor `(,buffer ,file))))
 
 (defun sqlite-descriptor-buffer (descriptor)
-  "Return the buffer associated to the DESCRIPTOR"
+  "Return the buffer associated to the DESCRIPTOR."
   (car (plist-get sqlite-process-plist descriptor)))
 
 (defun sqlite-descriptor-database (descriptor)
-  "Return the database file associated to the DESCRIPTOR"
+  "Return the database file associated to the DESCRIPTOR."
   (cadr (plist-get sqlite-process-plist descriptor)))
 
 (defun sqlite-unregister-descriptor (descriptor)
@@ -83,7 +89,7 @@ Registering is adding the proper association into `sqlite-process-plist'."
   "Initialize sqlite interface opening the DB-FILE sqlite file.
 This starts the process given by `sqlite-program' and prepares it
 for queries.  Return the sqlite process descriptor, a unique id
-that you can use to retrieve the process or send a query. "
+that you can use to retrieve the process or send a query."
   (let* ((db-file (expand-file-name db-file))
          (comint-use-prompt-regexp t)
          (comint-prompt-regexp "^\\(sqlite\\)?>")
@@ -99,7 +105,7 @@ that you can use to retrieve the process or send a query. "
         (error))
       (shell-mode))
     (sqlite-register-descriptor sqlite-descriptor-counter process-buffer db-file)
-    (incf sqlite-descriptor-counter)
+    (cl-incf sqlite-descriptor-counter)
     (while (accept-process-output process sqlite-response-timeout))
     (comint-redirect-send-command-to-process ".mode list" sqlite-output-buffer process nil t)
     (comint-redirect-send-command-to-process ".separator |" sqlite-output-buffer process nil t)
@@ -151,12 +157,12 @@ current buffer, but it's up to the caller to make sure, this
 function will not enforce it.  The first line can be a header
 line, depending on the value of sqlite-include-headers.  The
 result looks like this: (header-list row1-list row2-list
-row3-list) "
+row3-list)"
   (let ((num-lines (count-lines (goto-char (point-min)) (point-max)))
         (results-rows nil))
     (if (sqlite-error-line) ;; Check if it is an error line
         (error (concat "SQLite process error:" (string-trim (buffer-string)))))
-    (dotimes (counter num-lines)
+    (dotimes (_counter num-lines)
       (push (sqlite-parse-line) results-rows)
       (forward-line))
     (nreverse results-rows)))
@@ -168,7 +174,8 @@ There must be a parenthesis surrounding the error message for matching it with:
 This is used for `sqlite-check-errors' for raising errors with messages.")
 
 (defun sqlite-error-line ()
-  "Return t if the current line at the `sqlite-output-buffer' buffer match the `sqlite-regexp-error'. Else, return nil."
+  "Return t if the current line match the `sqlite-regexp-error'.
+Else, return nil."
   ;; (with-current-buffer sqlite-output-buffer
     (let ((line (thing-at-point 'line)))
       (cond ((null line) nil)
@@ -181,7 +188,7 @@ This is used for identifying which is an SQL command and which is a proper
 SQLite command.")
 
 (defun sqlite-prepare-query (sql-command)
-  "Add a query terminator to SQL-COMMAND if necessary
+  "Add a query terminator to SQL-COMMAND if necessary.
 SQLite commands start with \".\" and don't need terminator."
   (cond ((string-match "^\\." sql-command)
          sql-command)
@@ -194,8 +201,7 @@ SQLite commands start with \".\" and don't need terminator."
 DESCRIPTOR is the Sqlite instance descriptor given by `sqlite-init'.
 SQL-COMMAND is a string with the the SQL command.
 Return list of lists, as
-    (header-list row1-list row2-list row3-list)
-"
+    (header-list row1-list row2-list row3-list)"
   (let* ((comint-use-prompt-regexp t)
          (comint-prompt-regexp "^\\(sqlite\\)?>")
          (process-buffer (sqlite-descriptor-buffer descriptor))
@@ -213,5 +219,4 @@ Return list of lists, as
 (provide 'sqlite)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sqlite.el ends here
-
 
