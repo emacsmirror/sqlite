@@ -30,25 +30,53 @@
 ;;; Code:
 
 (require 'sqlite)
+(save-excursion
+  (get-buffer-create sqlite-output-buffer))
 
-(ert-deftest sqlite-test-take-next-value-test ()
-  (should (equal
-	   (sqlite-take-next-value
-	    "1|\"test city\"|\"test type\"|20180612T19:05:00")
-	   '("1" "\"test city\"|\"test type\"|20180612T19:05:00"))) ) ;; ert-deftest
-
-(ert-deftest sqlite-test-parse-result-test ()
-  (should (equal
-	   (with-temp-buffer
-	     (insert "1|\"test city\"|\"test type\"|20180612T19:05:00
+(ert-deftest sqlite-parse-line-test ()
+  (with-temp-buffer
+    (insert "1|\"test city\"|\"test type\"|20180612T19:05:00
 2|\"test city\"|\"test type\"|20180612T19:05:00
 3|Test|\"1234\"|2018-06-14T17:36:22.524Z
-4|\"test city\"|\"test type\"|20180612T19:05:00\n")
-	     (sqlite-parse-result) ) ;; with-temp-buffer
-	   '(("1" "\"test city\"" "\"test type\"" "20180612T19:05:00")
-	     ("2" "\"test city\"" "\"test type\"" "20180612T19:05:00")
-	     ("3" "Test" "\"1234\"" "2018-06-14T17:36:22.524Z")
-	     ("4" "\"test city\"" "\"test type\"" "20180612T19:05:00")))) ) ;; ert-deftest
+4|\"test city\"|\"test type\"|20180612T19:05:00
+\n")
+    (goto-char 1)
+    (should
+     (equal
+      (sqlite-parse-line)
+      '("1" "\"test city\"" "\"test type\"" "20180612T19:05:00")))
+    (forward-line)
+    (should
+     (equal
+      (sqlite-parse-line)
+      '("2" "\"test city\"" "\"test type\"" "20180612T19:05:00")))))
+
+(ert-deftest sqlite-parse-result-test ()
+  (should
+   (with-temp-buffer
+     (insert "1|\"test city\"|\"test type\"|20180612T19:05:00
+2|\"test city\"|\"test type\"|20180612T19:05:00
+3|Test|\"1234\"|2018-06-14T17:36:22.524Z
+4|\"test city\"|\"test type\"|20180612T19:05:00
+")
+     (equal
+      (sqlite-parse-result)
+      '(("1" "\"test city\"" "\"test type\"" "20180612T19:05:00")
+        ("2" "\"test city\"" "\"test type\"" "20180612T19:05:00")
+        ("3" "Test" "\"1234\"" "2018-06-14T17:36:22.524Z")
+        ("4" "\"test city\"" "\"test type\"" "20180612T19:05:00")))))
+  (should  ;; empty field is converted to nil
+   (equal
+    (with-temp-buffer (insert "id|value\n1|t\n2|") (sqlite-parse-result))
+    '(("id" "value") ("1" "t") ("2" nil))))
+  (should  ;; fields are trimmed
+   (equal
+    (with-temp-buffer (insert " id | value \n 1 | t \n 2 | ") (sqlite-parse-result))
+    '(("id" "value") ("1" "t") ("2" nil))))
+  (should  ;; also "middle" fields are trimmed
+   (equal
+    (with-temp-buffer (insert " id | value1 | value2 \n 1 | t | \n 2 |   | t") (sqlite-parse-result))
+    '(("id" "value1" "value2") ("1" "t" nil) ("2" nil "t")))))
 
 (provide 'sqlite-test)
   

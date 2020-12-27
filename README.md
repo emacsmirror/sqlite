@@ -20,20 +20,15 @@ An example for querying the database:
 
 ```elisp
 (require 'sqlite)
-    
-;; Open the SQLite DB
-(let ((descriptor (sqlite-init "~/mydb.sqlite")))
-    
-	;; Query something. Can be SQL or SQLite commands like ".tables".
-    (setq res (sqlite-query descriptor "SELECT * FROM persona"))
-	
-	;; Make more queries...
-	;; ...
-	
-	;; Close SQLite subprocess
-    (sqlite-bye descriptor)
-	
-    res
+
+;; typical usage involves three functions
+(let ((db (sqlite-init "~/mydb.sqlite")))  ; open connection
+  (unwind-protect  ; perform body, return value, then clean up
+      (let ((res (sqlite-query db "SELECT * FROM persona")))
+        ;; Make more queries...  more calculations ...
+        ;; ...
+        res)  ; the return value
+    (sqlite-bye db))  ; close connection
 )
 ```
 
