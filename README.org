@@ -24,7 +24,7 @@ This interface has the following features:
 
 * Usage
 
-See usage and more information at the [[http://www.emacswiki.org/emacs/SQLite-el][SQLite EmacsWiki page]].
+See usage and more information at the [[https://www.emacswiki.org/emacs/SQLite-el][SQLite EmacsWiki page]].
 
 Here is an example to query the database:
 
