@@ -33,7 +33,7 @@
 (save-excursion
   (get-buffer-create sqlite-output-buffer))
 
-(ert-deftest sqlite-parse-line-test ()
+(ert-deftest sqlite-test-parse-line-test ()
   (with-temp-buffer
     (insert "1|\"test city\"|\"test type\"|20180612T19:05:00
 2|\"test city\"|\"test type\"|20180612T19:05:00
@@ -51,7 +51,7 @@
       (sqlite-parse-line)
       '("2" "\"test city\"" "\"test type\"" "20180612T19:05:00")))))
 
-(ert-deftest sqlite-parse-result-test ()
+(ert-deftest sqlite-test-parse-result-test ()
   (should
    (with-temp-buffer
      (insert "1|\"test city\"|\"test type\"|20180612T19:05:00
