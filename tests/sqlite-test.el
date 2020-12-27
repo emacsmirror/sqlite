@@ -1,11 +1,13 @@
-;;; test.el --- 
+;;; sqlite-test.el --- Tests for sqlite.el -*- lexical-binding: t; -*-
 
-;; Copyright 2018 poo
+;; Copyright 2018 cnngimenez
 ;;
-;; Author: poo@juno
-;; Version: $Id: test.el,v 0.0 2018/07/08 17:01:17 poo Exp $
-;; Keywords: 
-;; X-URL: not distributed yet
+;; Author: cnngimenez
+;; Version: 1.1
+;; Keywords: extensions, lisp, sqlite
+;; URL: https://gitlab.com/cnngimenez/sqlite.el
+;; Package-Requires: ((emacs "24.5"))
+
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -18,44 +20,36 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
 ;;; Commentary:
 
-;; 
-
-;; Put this file into your load-path and the following into your ~/.emacs:
-;;   (require 'test)
+;; These are some tests for the sqlite.el package.
 
 ;;; Code:
 
+(require 'sqlite)
 
-(ert-deftest sqlite-take-next-value-test ()
+(ert-deftest sqlite-test-take-next-value-test ()
   (should (equal
 	   (sqlite-take-next-value
 	    "1|\"test city\"|\"test type\"|20180612T19:05:00")
-	   '("1" "\"test city\"|\"test type\"|20180612T19:05:00")))
-  ) ;; ert-deftest
+	   '("1" "\"test city\"|\"test type\"|20180612T19:05:00"))) ) ;; ert-deftest
 
-(ert-deftest sqlite-parse-result-test ()
+(ert-deftest sqlite-test-parse-result-test ()
   (should (equal
 	   (with-temp-buffer
 	     (insert "1|\"test city\"|\"test type\"|20180612T19:05:00
 2|\"test city\"|\"test type\"|20180612T19:05:00
 3|Test|\"1234\"|2018-06-14T17:36:22.524Z
 4|\"test city\"|\"test type\"|20180612T19:05:00\n")
-	     (sqlite-parse-result)
-	     ) ;; with-temp-buffer
+	     (sqlite-parse-result) ) ;; with-temp-buffer
 	   '(("1" "\"test city\"" "\"test type\"" "20180612T19:05:00")
 	     ("2" "\"test city\"" "\"test type\"" "20180612T19:05:00")
 	     ("3" "Test" "\"1234\"" "2018-06-14T17:36:22.524Z")
-	     ("4" "\"test city\"" "\"test type\"" "20180612T19:05:00"))
-	   )
-	  ) ;; should
-  ) ;; ert-deftest
+	     ("4" "\"test city\"" "\"test type\"" "20180612T19:05:00")))) ) ;; ert-deftest
 
-
-
-
-;;; test.el ends here
+(provide 'sqlite-test)
+  
+;;; sqlite-test.el ends here
