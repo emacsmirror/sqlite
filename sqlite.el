@@ -154,7 +154,7 @@ Return a list of elements per column."
     (while next
       (setq next (sqlite-take-next-value line))
       (when next
-	(setq parsed (append parsed (car next)))
+	(setq parsed (append parsed (list (car next))))
         ;; (add-to-list 'parsed (car next) t 'ignore)
         (setq line (cadr next))))
     parsed))
@@ -172,7 +172,7 @@ Result: (header-list row1-list row2-list row3-list)"
     (if (sqlite-error-line) ;; Check if it is an error line
         (error (concat "SQLite process error:" (sqlite-chomp (buffer-string)))))
     ;; no error, as Fredie Mercury said: "show must go on..."
-    (while ( < counter num-lines)
+    (while (< counter num-lines)
       (setq results-rows (append results-rows (list (sqlite-parse-line))))
       ;; (add-to-list 'results-rows (sqlite-parse-line) t 'ignore)
       (forward-line)
@@ -189,10 +189,10 @@ This is used for `sqlite-check-errors' for raising errors with messages.")
   "Return t if the current line match an error.
 Return t if the `sqlite-output-buffer' buffer match the `sqlite-regexp-error'.
 Else, return nil."
-  (with-current-buffer sqlite-output-buffer
-    (if (string-match sqlite-regexp-error (sqlite-chomp (thing-at-point 'line)))
-        t
-      nil)))
+  ;; (with-current-buffer sqlite-output-buffer ;; 
+  (if (string-match sqlite-regexp-error (sqlite-chomp (thing-at-point 'line)))
+      t
+    nil))
 
 (defvar sqlite-regexp-sqlite-command "^\\..*"
   "Regexp that match an SQLite command.
